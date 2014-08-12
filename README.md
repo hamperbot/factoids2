@@ -4,6 +4,6 @@ INSTALL
 =======
 
 ```shell
-pip install git+https://github.com/mythmon/hamper-factoids2.git
+pip install git+https://github.com/mythmon/factoids2.git
 ```
 
