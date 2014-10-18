@@ -18,7 +18,7 @@ class Factoids(ChatCommandPlugin):
     """Second generation of Factoids."""
 
     name = 'factoids2'
-    priority = 2
+    priority = 0
 
     def setup(self, loader):
         super(Factoids, self).setup(loader)
@@ -68,7 +68,7 @@ class Factoids(ChatCommandPlugin):
         if match:
             flags = 0
             if 'i' in match.group(2):
-                flags |= 0
+                flags |= re.I
             factoid['trigger'] = re.compile(match.group(1), flags)
         else:
             factoid['trigger'] = NotRegex(factoid['trigger'], type)
@@ -84,11 +84,16 @@ class Factoids(ChatCommandPlugin):
         factoid['id'] = factoid_orm.id
 
     def message(self, bot, comm):
+        if super(Factoids, self).message(bot, comm):
+            return True
+
         matched = []
         message = comm['message'].strip()
 
         for factoid in self.factoids:
-            match = factoid['trigger'].match(message)
+            match = factoid['trigger'].search(message)
+            if not match and comm['directed']:
+                match = factoid['trigger'].search('!' + message)
             if match:
                 matched.append(factoid)
 
@@ -101,8 +106,6 @@ class Factoids(ChatCommandPlugin):
                     self.send_factoid(bot, comm, factoid)
                     return True
 
-        # Welp, nothing matched.
-        return super(Factoids, self).message(bot, comm)
 
     def send_factoid(self, bot, comm, factoid):
         if factoid['action'] == 'say':
@@ -132,27 +135,40 @@ class Factoids(ChatCommandPlugin):
             self.plugin.add_factoid(factoid, factoid_type)
             bot.reply(comm, "{user}: Well, ok, but that's the old way."
                       .format(**comm))
+            bot.reply(comm, 'got it')
             return True
 
     class ModernLearn(Command):
         name = 'learn'
         regex = r'^learn\s+(.*=.*)$'
+        short_desc = ('!learn key=val key=val - Keys can be response, trigger, '
+                      'action, and probability. Values can be word, "string", '
+                      'or /regex/')
+
+        valid_keys = ['response', 'trigger', 'action', 'probability']
 
         def command(self,  bot, comm, groups):
             to_parse = groups[0]
             try:
                 factoid_dict = learn_grammar(to_parse).parse()
+                for key in factoid_dict:
+                    if key not in self.valid_keys:
+                        raise ValueError(key)
             except ParseError as e:
                 bot.reply(comm, 'Parse error: "{}". Trail: {}.'
                                 .format(dict(e.error)['message'], e.trail))
+            except ValueError as e:
+                bot.reply(comm, "{user}: {} isn't a valid key. The valid keys "
+                                "are trigger, response, action, probability."
+                                .format(e.message, **comm))
             else:
                 # bot.reply(comm, 'Yeah! {}'.format(factoid_dict))
                 self.plugin.add_factoid(factoid_dict)
                 bot.reply(comm, '{user}: Got it.'.format(**comm))
 
-        # Maybe something like: hamper
-        # !learn trigger=/^foo$/ response=bar probability=0.5 action=say
-        # !learn trigger=/!fire (.*)/ resp="fires $1" prob=1 action=me
+        # Maybe something like:
+        #   !learn trigger=/^foo$/ response=bar probability=0.5 action=say
+        #   !learn trigger=/!fire (.*)/ resp="fires $1" prob=1 action=me
 
 
 class NotRegex(object):
