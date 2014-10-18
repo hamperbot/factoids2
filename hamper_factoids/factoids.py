@@ -24,10 +24,12 @@ class Factoids(ChatCommandPlugin):
         super(Factoids, self).setup(loader)
         self.db = loader.db
         SQLAlchemyBase.metadata.create_all(self.db.engine)
+
+        self.factoids = []
         self.load_factoids()
+        self.load_old_factoids()
 
     def load_factoids(self):
-        self.factoids = []
         raw_factoids = (self.db.session.query(RawField)
                         .filter(RawField.kind == 'factoid'))
 
@@ -40,10 +42,19 @@ class Factoids(ChatCommandPlugin):
                 'response': None,
             }
             factoid.update(json.loads(raw.data))
-            self.factoids.append(factoid)
+            if factoid['trigger'] and factoid['response']:
+                self.factoids.append(self.upgrade_factoid(factoid))
 
-        self.factoids = [self.upgrade_factoid(f) for f in self.factoids
-                         if f['trigger'] and f['response']]
+    def load_old_factoids(self):
+        for old in self.db.session.query(OldFactoid).all():
+            factoid = {
+                'id': old.id,
+                'trigger': old.trigger,
+                'probability': 1,
+                'action': old.action,
+                'response': old.response,
+            }
+            self.factoids.append(self.upgrade_factoid(factoid, old.type))
 
     def upgrade_factoid(self, factoid_dict, type='is'):
         factoid = {
@@ -108,23 +119,23 @@ class Factoids(ChatCommandPlugin):
     class ClassicLearn(Command):
         """Learn a factoid."""
         name = 'learn'
-        regex = (r'learn(?:\s+that)?\s+(?P<trigger>.+)\s+(?P<type>\w+)\s+'
-                 r'<(?P<action>\w+)>\s+(?P<response>.*)')
+        regex = r'learn(?:\s+that)?\s+(.+)\s+(\w+)\s+<(\w+)>\s+(.*)'
 
         def command(self, bot, comm, groups):
             bot.reply(comm, 'hmm {0}'.format(groups))
+            trigger, factoid_type, action, response = groups
             factoid = {
-                'trigger': groups['trigger'],
-                'action': groups['action'],
-                'response': groups['response'],
+                'trigger': trigger,
+                'action': action,
+                'response': response,
             }
-            self.plugin.add(factoid, groups['type'])
+            self.plugin.add_factoid(factoid, factoid_type)
             bot.reply(comm, "{user}: Well, ok, but that's the old way."
                       .format(**comm))
             return True
 
     class ModernLearn(Command):
-        name = 'modern learn'
+        name = 'learn'
         regex = r'^learn\s+(.*=.*)$'
 
         def command(self,  bot, comm, groups):
@@ -149,13 +160,17 @@ class NotRegex(object):
         self.string = string
         self.type = type
 
-    def match(self, target):
+    def search(self, target):
         if self.type == 'is':
             return target == self.string
         elif self.type == 'triggers':
             return target in self.string
         else:
             return False
+
+    def __repr__(self):
+        return ('<{} {} "{}">'
+                .format(self.__class__.__name__, self.type, self.string))
 
 
 class RawField(SQLAlchemyBase):
