@@ -89,10 +89,8 @@ class Factoids(ChatCommandPlugin):
     def delete_factoid(self, factoid_id):
         factoid_id = str(factoid_id)
         found = None
-        import q
 
         for i, factoid in enumerate(self.factoids):
-            q(factoid['id'], factoid_id)
             if factoid['id'] == factoid_id:
                 found = i
                 break
