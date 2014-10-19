@@ -48,7 +48,7 @@ class Factoids(ChatCommandPlugin):
     def load_old_factoids(self):
         for old in self.db.session.query(OldFactoid).all():
             factoid = {
-                'id': old.id,
+                'id': 'old{}'.format(old.id),
                 'trigger': old.trigger,
                 'probability': 1,
                 'action': old.action,
@@ -64,6 +64,7 @@ class Factoids(ChatCommandPlugin):
             'response': None,
         }
         factoid.update(factoid_dict)
+
         match = re.match(r'^/(.*)/(i?)', factoid['trigger'])
         if match:
             flags = 0
@@ -72,6 +73,7 @@ class Factoids(ChatCommandPlugin):
             factoid['trigger'] = re.compile(match.group(1), flags)
         else:
             factoid['trigger'] = NotRegex(factoid['trigger'], type)
+
         return factoid
 
     def add_factoid(self, factoid_dict, factoid_type='is'):
@@ -81,7 +83,39 @@ class Factoids(ChatCommandPlugin):
         factoid_orm = RawField('factoid', json.dumps(factoid_dict))
         self.db.session.add(factoid_orm)
         self.db.session.commit()
-        factoid['id'] = factoid_orm.id
+        factoid['id'] = str(factoid_orm.id)
+        return factoid
+
+    def delete_factoid(self, factoid_id):
+        factoid_id = str(factoid_id)
+        found = None
+        import q
+
+        for i, factoid in enumerate(self.factoids):
+            q(factoid['id'], factoid_id)
+            if factoid['id'] == factoid_id:
+                found = i
+                break
+
+        if found is not None:
+            self.factoids.pop(i)
+        else:
+            raise IndexError('No such id.')
+
+        if factoid_id.startswith('old'):
+            factoid_id = int(factoid_id.strip('old'))
+            factoid = (self.db.session.query(OldFactoid)
+                        .filter(OldFactoid.id == factoid_id)
+                        .first())
+        else:
+            factoid = (self.db.session.query(RawField)
+                       .filter(RawField.id == factoid_id,
+                               RawField.kind == 'factoid')
+                       .first())
+
+        self.db.session.delete(factoid)
+        self.db.session.commit()
+
 
     def message(self, bot, comm):
         if super(Factoids, self).message(bot, comm):
@@ -132,10 +166,10 @@ class Factoids(ChatCommandPlugin):
                 'action': action,
                 'response': response,
             }
-            self.plugin.add_factoid(factoid, factoid_type)
-            bot.reply(comm, "{user}: Well, ok, but that's the old way."
-                      .format(**comm))
-            bot.reply(comm, 'got it')
+            factoid = self.plugin.add_factoid(factoid, factoid_type)
+            bot.reply(comm, "{user}: Well, ok, but that's the old way. I "
+                            "added factoid #{0}."
+                            .format(factoid['id'], **comm))
             return True
 
     class ModernLearn(Command):
@@ -163,12 +197,37 @@ class Factoids(ChatCommandPlugin):
                                 .format(e.message, **comm))
             else:
                 # bot.reply(comm, 'Yeah! {}'.format(factoid_dict))
-                self.plugin.add_factoid(factoid_dict)
-                bot.reply(comm, '{user}: Got it.'.format(**comm))
+                factoid = self.plugin.add_factoid(factoid_dict)
+                bot.reply(comm, "{user}: Got it. That's factoid #{0}"
+                                .format(factoid['id'], **comm))
 
         # Maybe something like:
         #   !learn trigger=/^foo$/ response=bar probability=0.5 action=say
         #   !learn trigger=/!fire (.*)/ resp="fires $1" prob=1 action=me
+
+    class Unlearn(Command):
+        name = 'unlearn'
+        regex = r'^unlearn\s+(.*=.*)$'
+        short_desc = ('!unlearn id=num - '
+                      'Delete a factoid by id (like !unlearn id=4)')
+
+        def command(self, bot, comm, groups):
+            to_parse= groups[0]
+            try:
+                parsed = learn_grammar(to_parse).parse()
+                if parsed.keys() != ['id']:
+                    bot.reply(comm, ('{user}: I only know how to unlearn by id '
+                                     'right now.'.format(**comm)))
+            except ParseError as e:
+                bot.reply(comm, 'Parse error: "{}". Trail: {}.'
+                                .format(dict(e.error)['message'], e.trail))
+            else:
+                try:
+                    self.plugin.delete_factoid(parsed['id'])
+                    bot.reply(comm, ('{user}: Ok.'.format(**comm)))
+                except IndexError:
+                    bot.reply(comm, ("{user}: I couldn't find that."
+                                     .format(**comm)))
 
 
 class NotRegex(object):
