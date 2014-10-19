@@ -35,7 +35,7 @@ class Factoids(ChatCommandPlugin):
 
         for raw in raw_factoids:
             factoid = {
-                'id': raw.id,
+                'id': str(raw.id),
                 'trigger': None,
                 'probability': 1,
                 'action': 'say',
