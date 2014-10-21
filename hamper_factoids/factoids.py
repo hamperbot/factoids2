@@ -127,22 +127,22 @@ class Factoids(ChatCommandPlugin):
             if not match and comm['directed']:
                 match = factoid['trigger'].search('!' + message)
             if match:
-                matched.append(factoid)
+                matched.append((factoid, match))
 
         if matched:
             # Now look through all of them, taking in to account probabilities
             choice = random() * len(matched)
-            for factoid in matched:
+            for factoid, match in matched:
                 choice -= factoid['probability']
                 if choice < 0:
-                    self.send_factoid(bot, comm, factoid)
+                    self.send_factoid(bot, comm, factoid, match)
                     return True
 
 
-    def send_factoid(self, bot, comm, factoid):
+    def send_factoid(self, bot, comm, factoid, match):
         tag = 'factoid #{id}'.format(**factoid)
 
-        groups = factoid['trigger'].search(comm['message'].strip()).groups()
+        groups = match.groups()
 
         if factoid['action'] == 'say':
             bot.reply(comm, factoid['response'], tag=tag,
