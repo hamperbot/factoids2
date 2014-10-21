@@ -140,15 +140,19 @@ class Factoids(ChatCommandPlugin):
 
 
     def send_factoid(self, bot, comm, factoid):
+        tag = 'factoid #{id}'.format(**factoid)
+
         if factoid['action'] == 'say':
-            bot.reply(comm, factoid['response'])
+            bot.reply(comm, factoid['response'], tag=tag)
         elif factoid['action'] == 'reply':
-            bot.reply(comm, '{user}: {0}'.format(factoid['response'], **comm))
+            bot.reply(comm, '{user}: {0}'.format(factoid['response'], **comm),
+                      tag=tag)
         elif factoid['action'] in ['me', 'emote', 'act', 'action']:
-            bot.me(comm, factoid['response'])
+            bot.me(comm, factoid['response'], tag=tag)
         else:
             bot.reply(comm, 'Unknown action "{action}" on factoid {id}'
-                      .format(**factoid))
+                            .format(**factoid),
+                      tag='an error on ' + tag)
 
     # Because this command is defined first, it will be checked first,
     class ClassicLearn(Command):
