@@ -18,7 +18,7 @@ class Factoids(ChatCommandPlugin):
     """Second generation of Factoids."""
 
     name = 'factoids2'
-    priority = 0
+    priority = 1
 
     def setup(self, loader):
         super(Factoids, self).setup(loader)
