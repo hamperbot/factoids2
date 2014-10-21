@@ -142,17 +142,20 @@ class Factoids(ChatCommandPlugin):
     def send_factoid(self, bot, comm, factoid):
         tag = 'factoid #{id}'.format(**factoid)
 
+        groups = factoid['trigger'].search(comm['message'].strip()).groups()
+
         if factoid['action'] == 'say':
-            bot.reply(comm, factoid['response'], tag=tag)
+            bot.reply(comm, factoid['response'], tag=tag,
+                      vars=groups, kwvars=factoid)
         elif factoid['action'] == 'reply':
-            bot.reply(comm, '{user}: {0}'.format(factoid['response'], **comm),
-                      tag=tag)
+            bot.reply(comm, '{user}: {response}', tag=tag,
+                      vars=groups, kwvars=factoid)
         elif factoid['action'] in ['me', 'emote', 'act', 'action']:
-            bot.me(comm, factoid['response'], tag=tag)
+            bot.me(comm, factoid['response'], tag=tag,
+                   vars=groups, kwvars=factoid)
         else:
-            bot.reply(comm, 'Unknown action "{action}" on factoid {id}'
-                            .format(**factoid),
-                      tag='an error on ' + tag)
+            bot.reply(comm, 'Unknown action "{action}" on factoid #{id}',
+                      kwvars=factoid, tag='an error on ' + tag)
 
     # Because this command is defined first, it will be checked first,
     class ClassicLearn(Command):
@@ -239,15 +242,21 @@ class NotRegex(object):
 
     def search(self, target):
         if self.type == 'is':
-            return target == self.string
+            if target == self.string:
+                return self.FakeMatch()
         elif self.type == 'triggers':
-            return target in self.string
-        else:
-            return False
+            if target in self.string:
+                return self.FakeMatch()
+
+        return None
 
     def __repr__(self):
         return ('<{} {} "{}">'
                 .format(self.__class__.__name__, self.type, self.string))
+
+    class FakeMatch(object):
+        def groups(self):
+            return []
 
 
 class RawField(SQLAlchemyBase):

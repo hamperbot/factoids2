@@ -5,7 +5,7 @@ with open('requirements.txt') as f:
 
 setup(
     name='hamper_factoids',
-    version='0.5',
+    version='0.6',
     packages=['hamper_factoids'],
     author='Mike Cooper',
     author_email='mythmon@gmail.com',
