@@ -245,7 +245,7 @@ class NotRegex(object):
             if target == self.string:
                 return self.FakeMatch()
         elif self.type == 'triggers':
-            if target in self.string:
+            if self.string in target:
                 return self.FakeMatch()
 
         return None
