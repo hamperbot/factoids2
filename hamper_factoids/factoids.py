@@ -114,6 +114,14 @@ class Factoids(ChatCommandPlugin):
         self.db.session.delete(factoid)
         self.db.session.commit()
 
+    def get_factoid(self, factoid_id):
+        factoid_id = str(factoid_id)
+
+        for i, factoid in enumerate(self.factoids):
+            if factoid['id'] == factoid_id:
+                return factoid
+
+        raise IndexError('No such id.')
 
     def message(self, bot, comm):
         if super(Factoids, self).message(bot, comm):
@@ -206,9 +214,18 @@ class Factoids(ChatCommandPlugin):
                 bot.reply(comm, "{user}: Got it. That's factoid #{0}"
                                 .format(factoid['id'], **comm))
 
-        # Maybe something like:
-        #   !learn trigger=/^foo$/ response=bar probability=0.5 action=say
-        #   !learn trigger=/!fire (.*)/ resp="fires $1" prob=1 action=me
+    def factoid_query(self, bot, to_parse):
+        try:
+            parsed = learn_grammar(to_parse).parse()
+            if parsed.keys() != ['id']:
+                bot.reply(comm, ('{user}: I only know how to find by id '
+                                 'right now.'))
+        except ParseError as e:
+            bot.reply(comm, 'Parse error: "{}". Trail: {}.'
+                            .format(dict(e.error)['message'], e.trail))
+            return None
+        else:
+            return self.get_factoid(parsed['id'])
 
     class Unlearn(Command):
         name = 'unlearn'
@@ -217,22 +234,54 @@ class Factoids(ChatCommandPlugin):
                       'Delete a factoid by id (like !unlearn id=4)')
 
         def command(self, bot, comm, groups):
-            to_parse= groups[0]
+            to_parse = groups[0]
             try:
-                parsed = learn_grammar(to_parse).parse()
-                if parsed.keys() != ['id']:
-                    bot.reply(comm, ('{user}: I only know how to unlearn by id '
-                                     'right now.'.format(**comm)))
-            except ParseError as e:
-                bot.reply(comm, 'Parse error: "{}". Trail: {}.'
-                                .format(dict(e.error)['message'], e.trail))
-            else:
-                try:
-                    self.plugin.delete_factoid(parsed['id'])
-                    bot.reply(comm, ('{user}: Ok.'.format(**comm)))
-                except IndexError:
-                    bot.reply(comm, ("{user}: I couldn't find that."
-                                     .format(**comm)))
+                to_delete = self.plugin.factoid_query(bot, to_parse)
+                self.plugin.delete_factoid(to_delete['id'])
+                bot.reply(comm, '{user}: Ok.')
+            except IndexError:
+                bot.reply(comm, "{user}: I couldn't find that.")
+
+    class Dump(Command):
+        name = 'dumpfactoid'
+        regex = '^dump\s*factoid\s+(.*=.*)$'
+        short_desc = ('!dumpfactoid id=num - '
+                      'Dump all information about a factoid by id')
+
+        def factoid_string(self, factoid):
+            trigger = factoid['trigger']
+            if isinstance(trigger, NotRegex):
+                if trigger.type == 'is':
+                    trigger_rep = '"{}"'.format(trigger.string)
+                elif trigger.type == 'triggers':
+                    trigger_rep = '/{}/'.format(trigger.string)
+                else:
+                    trigger_rep = str(trigger)
+            else:  # assume regex
+                trigger_rep = '/{}/'.format(trigger.pattern)
+
+            return (
+                'id={id} '
+                'trigger={trigger} '
+                'response="{response}" '
+                'action={action} '
+                'probability={probability}'
+            ).format(
+                id=factoid['id'],
+                trigger=trigger_rep,
+                response=factoid['response'],
+                action=factoid['action'],
+                probability=factoid['probability'],
+            ).replace('{', '{{').replace('}', '}}')
+
+        def command(self, bot, comm, groups):
+            to_parse = groups[0]
+            try:
+                factoid = self.plugin.factoid_query(bot, to_parse)
+                factoid_rep = self.factoid_string(factoid)
+                bot.reply(comm, '{user}: {}', vars=[factoid_rep])
+            except IndexError:
+                bot.reply(comm, "{user}: I couldn't find that.")
 
 
 class NotRegex(object):
