@@ -59,7 +59,6 @@ class Factoids(ChatCommandPlugin):
     def upgrade_factoid(self, factoid_dict, type='is'):
         factoid = {
             'trigger': None,
-            'probability': 1,
             'action': 'say',
             'response': None,
         }
@@ -67,12 +66,20 @@ class Factoids(ChatCommandPlugin):
 
         match = re.match(r'^/(.*)/(i?)', factoid['trigger'])
         if match:
+            kind = 'regex'
             flags = 0
             if 'i' in match.group(2):
                 flags |= re.I
             factoid['trigger'] = re.compile(match.group(1), flags)
         else:
+            kind = 'full'
             factoid['trigger'] = NotRegex(factoid['trigger'], type)
+
+        if 'probability' not in factoid:
+            if kind == 'regex':
+                factoid['probability'] = 0.33
+            else:
+                factoid['probability'] = 1
 
         return factoid
 
@@ -172,7 +179,6 @@ class Factoids(ChatCommandPlugin):
         regex = r'learn(?:\s+that)?\s+(.+)\s+(\w+)\s+<(\w+)>\s+(.*)'
 
         def command(self, bot, comm, groups):
-            bot.reply(comm, 'hmm {0}'.format(groups))
             trigger, factoid_type, action, response = groups
             factoid = {
                 'trigger': trigger,
@@ -209,10 +215,15 @@ class Factoids(ChatCommandPlugin):
                                 "are trigger, response, action, probability."
                                 .format(e.message, **comm))
             else:
-                # bot.reply(comm, 'Yeah! {}'.format(factoid_dict))
                 factoid = self.plugin.add_factoid(factoid_dict)
-                bot.reply(comm, "{user}: Got it. That's factoid #{0}"
-                                .format(factoid['id'], **comm))
+                msg = "{user}: Got it. That's factoid #{id}"
+                if factoid['probability'] < 1:
+                    msg += ' (probability={probability})'
+
+                bot.reply(comm, msg, kwvars={
+                        'id': factoid['id'],
+                        'probability': factoid['probability']
+                    })
 
     def factoid_query(self, bot, to_parse):
         try:
