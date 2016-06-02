@@ -145,14 +145,36 @@ class Factoids(ChatCommandPlugin):
                 matched.append((factoid, match))
 
         if matched:
-            # Now look through all of them, taking in to account probabilities
+            # Now choose a factoid, possibly choosing none, based on probabilities
+            #
+            # Consider n factoids, all of which have probability 1.0. They are
+            # mapped onto the space from 0 to n.
+            #
+            # A random number between 0 and n is generated, and the factoid at
+            # that point is chosen.
+            #
+            #   0         1         2         3
+            #   -------------------------------
+            #   |   f1    |   f2    |   f3    |
+            #                    ^
+            #                 if r = 1.7, f2 chosen
+            #
+            # Now consider n factoids, all of which have probability 0.5.
+            #
+            #   0         1         2         3
+            #   -------------------------------
+            #   | f1 | f2 | f3 |   nothing    |
+            #                    ^
+            #                 if r = 1.7, nothing chosen
+            #           ^
+            #        if r = 0.7, f2 chosen
+            #
             choice = random() * len(matched)
             for factoid, match in matched:
                 choice -= factoid['probability']
                 if choice < 0:
                     self.send_factoid(bot, comm, factoid, match)
                     return True
-
 
     def send_factoid(self, bot, comm, factoid, match):
         tag = 'factoid #{id}'.format(**factoid)
